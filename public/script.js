@@ -256,31 +256,6 @@ function showSuggestions(items) {
   suggestionsList.style.display = 'block';
 }
 
-async function fetchSuggestions() {
-  const query = pincodeInput.value.trim();
-  if (!query || query.length < 3) { suggestionsList.style.display = 'none'; return; }
-
-  // Try local Nominatim suggestions for Indian locations
-  try {
-    const resp = await fetch(
-      `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=in&limit=6&addressdetails=0`,
-      { headers: { 'Accept-Language': 'en' } }
-    );
-    const data = await resp.json();
-    const suggestions = data.map(d => ({ value: d.display_name }));
-    showSuggestions(suggestions);
-  } catch {
-    // Fallback to app API if available
-    try {
-      const resp2 = await fetch(`/api/suggest?query=${encodeURIComponent(query)}`);
-      const data2 = await resp2.json();
-      showSuggestions(data2.suggestions || []);
-    } catch {
-      suggestionsList.style.display = 'none';
-    }
-  }
-}
-
 pincodeInput.addEventListener('input', () => {
   clearTimeout(suggestionTimer);
   suggestionTimer = setTimeout(fetchSuggestions, 280);
@@ -547,6 +522,96 @@ listViewBtn.addEventListener('click', () => switchView('list'));
 mapViewBtn.addEventListener('click', () => switchView('map'));
 
 // ── Main Search ──────────────────────────────────────────────
+// ── Category to Overpass query map ──────────────────────────
+const categoryToOverpass = {
+  all: '["amenity"]',
+  hospital: '["amenity"="hospital"]',
+  medical: '["amenity"="doctors"]',
+  doctor: '["amenity"="doctors"]',
+  dentist: '["amenity"="dentist"]',
+  clinic: '["amenity"="clinic"]',
+  pharmacy: '["amenity"="pharmacy"]',
+  grocery: '["shop"="supermarket"]',
+  kirana: '["shop"="convenience"]',
+  supermarket: '["shop"="supermarket"]',
+  restaurant: '["amenity"="restaurant"]',
+  food: '["amenity"="fast_food"]',
+  cafe: '["amenity"="cafe"]',
+  bakery: '["shop"="bakery"]',
+  clothing: '["shop"="clothes"]',
+  footwear: '["shop"="shoes"]',
+  electronics: '["shop"="electronics"]',
+  atm: '["amenity"="atm"]',
+  bank: '["amenity"="bank"]',
+  petrol: '["amenity"="fuel"]',
+  salon: '["shop"="hairdresser"]',
+  laundry: '["shop"="laundry"]',
+  stationery: '["shop"="stationery"]',
+  school: '["amenity"="school"]',
+};
+
+async function fetchFromOverpass(lat, lng, category, radiusMeters) {
+  const filter = categoryToOverpass[category] || '["amenity"]';
+  const query = `
+    [out:json][timeout:25];
+    (
+      node${filter}(around:${radiusMeters},${lat},${lng});
+      way${filter}(around:${radiusMeters},${lat},${lng});
+    );
+    out center tags 50;
+  `;
+
+  const resp = await fetch('https://overpass-api.de/api/interpreter', {
+    method: 'POST',
+    body: query,
+  });
+
+  if (!resp.ok) throw new Error('Overpass API error. Please try again.');
+  const data = await resp.json();
+
+  return (data.elements || []).map(el => {
+    const tags = el.tags || {};
+    const elLat = el.lat ?? el.center?.lat;
+    const elLng = el.lon ?? el.center?.lon;
+
+    // Build phone
+    const phone = tags.phone || tags['contact:phone'] || tags['contact:mobile'] || '';
+
+    // Build address
+    const addrParts = [
+      tags['addr:housenumber'],
+      tags['addr:street'],
+      tags['addr:suburb'],
+      tags['addr:city'],
+      tags['addr:state'],
+    ].filter(Boolean);
+    const address = addrParts.length > 0
+      ? addrParts.join(', ')
+      : tags['addr:full'] || 'Address not available';
+
+    // Detect open status from opening_hours (basic check)
+    let openNow = null;
+    if (tags.opening_hours) {
+      // If it says 24/7 mark as open
+      if (tags.opening_hours === '24/7') openNow = true;
+    }
+
+    return {
+      placeId: String(el.id),
+      name: tags.name || tags['name:en'] || tags.brand || 'Unnamed Place',
+      address,
+      phone: phone.replace(/\s+/g, ''),
+      website: tags.website || tags['contact:website'] || '',
+      rating: null,
+      openNow,
+      delivery: tags.delivery === 'yes',
+      lat: elLat,
+      lng: elLng,
+      category,
+    };
+  }).filter(p => p.lat && p.lng && p.name !== 'Unnamed Place');
+}
+
 async function searchNearby() {
   const category = categorySelect.value;
   const radius = radiusSelect.value;
@@ -560,85 +625,60 @@ async function searchNearby() {
     let searchCenter, displayName, precisionLabel;
 
     if (locationMode === 'gps' && gpsCoords) {
-      // Use GPS coordinates directly
       searchCenter = gpsCoords;
       displayName = gpsLocationName.textContent || 'Your location';
       precisionLabel = 'GPS (high accuracy)';
     } else {
-      // Text / pincode geocoding
       const query = pincodeInput.value.trim() || '285123';
 
-      // Try app API first, fallback to Nominatim
-      let geocodeData;
-      try {
-        const geocodeResp = await fetch(`/api/geocode?query=${encodeURIComponent(query)}`);
-        geocodeData = await geocodeResp.json();
-      } catch {
-        geocodeData = {};
+      const nomResp = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=in&limit=1`,
+        { headers: { 'Accept-Language': 'en' } }
+      );
+      const nomData = await nomResp.json();
+
+      if (!nomData.length) {
+        throw new Error('Location not found. Please try a different pincode or place name.');
       }
 
-      if (!geocodeData.lat || !geocodeData.lng) {
-        // Nominatim fallback
-        const nomResp = await fetch(
-          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=in&limit=1`,
-          { headers: { 'Accept-Language': 'en' } }
-        );
-        const nomData = await nomResp.json();
-        if (!nomData.length) throw new Error('Unable to locate this area. Please try a different pincode or place name.');
-        geocodeData = {
-          lat: nomData[0].lat,
-          lng: nomData[0].lon,
-          displayName: nomData[0].display_name,
-          bbox: nomData[0].boundingbox,
-          precision: 'nominatim',
-        };
-      }
-
-      const exact = { lat: Number(geocodeData.lat), lng: Number(geocodeData.lng) };
-      searchCenter = (Number.isFinite(exact.lat) && Number.isFinite(exact.lng))
-        ? exact
-        : computeBBoxCenter(geocodeData.bbox) || exact;
-      displayName = geocodeData.displayName || query;
-      precisionLabel = getPrecisionLabel(geocodeData);
+      searchCenter = { lat: parseFloat(nomData[0].lat), lng: parseFloat(nomData[0].lon) };
+      displayName = nomData[0].display_name;
+      precisionLabel = 'Nominatim';
     }
 
     currentCenter = searchCenter;
     locationText.textContent = displayName;
     pageTitleLocation.textContent = displayName;
     precisionText.textContent = precisionLabel;
+    apiMode.textContent = 'OpenStreetMap';
 
-    // Fetch places
-    let placesData;
-    try {
-      const placesResp = await fetch(
-        `/api/places?lat=${searchCenter.lat}&lng=${searchCenter.lng}&category=${encodeURIComponent(category)}&radius=${radius}`
-      );
-      placesData = await placesResp.json();
-    } catch {
-      // If backend unavailable, provide empty results gracefully
-      placesData = { results: [], source: 'unavailable' };
-    }
+    setStatus('Fetching places from OpenStreetMap…');
 
-    const results = (placesData.results || []).map(place => ({
-      ...place,
-      category: place.category || category,
-      delivery: Boolean(place.delivery),
-      distanceKm: calculateDistance(searchCenter.lat, searchCenter.lng, place.lat, place.lng),
-    }));
+    const places = await fetchFromOverpass(
+      searchCenter.lat,
+      searchCenter.lng,
+      category,
+      Number(radius)
+    );
 
-    const radiusKm = Number(radiusSelect.value) / 1000;
+    const radiusKm = Number(radius) / 1000;
 
-    currentResults = results
-      .filter(place => place.distanceKm <= radiusKm)
+    currentResults = places
+      .map(place => ({
+        ...place,
+        distanceKm: calculateDistance(
+          searchCenter.lat, searchCenter.lng,
+          place.lat, place.lng
+        ),
+      }))
+      .filter(p => p.distanceKm <= radiusKm)
       .sort((a, b) => {
         if (a.openNow !== b.openNow) return Number(b.openNow) - Number(a.openNow);
         return a.distanceKm - b.distanceKm;
       });
 
-    apiMode.textContent = placesData.source === 'google' ? 'Live API' : placesData.source === 'unavailable' ? 'Offline' : 'Fallback Demo';
-
     if (!currentResults.length) {
-      setStatus('No places found. Try a different category or larger radius.', 'error');
+      setStatus('No places found. Try a larger radius or different category.', 'error');
       resultCount.textContent = '0 found';
       saveSearchState();
       return;
@@ -647,7 +687,6 @@ async function searchNearby() {
     saveSearchState();
     renderResults();
 
-    // If map view is already active, render map
     if (currentView === 'map') {
       setTimeout(() => {
         if (!leafletMap) initMap(currentCenter);
