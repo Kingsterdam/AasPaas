@@ -7,13 +7,12 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <!-- Leaflet CSS for map view -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
 
-    <!-- ── NAVBAR ── -->
+    <!-- NAVBAR -->
     <nav class="navbar" id="mainNav">
       <div class="nav-inner">
         <div class="nav-brand">
@@ -21,6 +20,7 @@
           <span class="nav-title">AasPaas</span>
         </div>
         <div class="nav-actions">
+          <button id="darkModeBtn" class="nav-btn" title="Toggle dark mode">🌙</button>
           <button id="largeTextBtn" class="nav-btn" title="Toggle large text">A+ / A−</button>
           <button id="langToggleBtn" class="nav-btn">हिंदी</button>
           <button id="voiceSearchBtn" class="nav-btn" title="Voice search">🎙️</button>
@@ -28,7 +28,7 @@
       </div>
     </nav>
 
-    <!-- ── MAIN APP ── -->
+    <!-- MAIN APP -->
     <div class="app-shell">
 
       <!-- Hero -->
@@ -42,7 +42,6 @@
       <!-- Search Panel -->
       <section class="search-panel">
 
-        <!-- Location Mode Tabs -->
         <div class="location-mode-bar">
           <button class="loc-mode-btn active" data-mode="text">
             <span>✏️</span> Type location
@@ -52,7 +51,6 @@
           </button>
         </div>
 
-        <!-- GPS location status bar (shown when GPS mode active) -->
         <div id="gpsStatusBar" class="gps-status-bar" style="display:none;">
           <span id="gpsStatusIcon">📡</span>
           <span id="gpsStatusText">Click "Detect My Location" to begin</span>
@@ -60,7 +58,6 @@
         </div>
 
         <form id="searchForm">
-          <!-- Text input (shown when text mode active) -->
           <div class="input-group suggestion-wrap" id="textInputWrap">
             <label for="pincodeInput">Location / Pincode</label>
             <input
@@ -73,7 +70,6 @@
             <ul id="suggestionsList" class="suggestions-list"></ul>
           </div>
 
-          <!-- GPS display (shown when GPS mode active, hidden by default) -->
           <div class="input-group" id="gpsInputWrap" style="display:none;">
             <label>Detected Location</label>
             <div id="gpsLocationDisplay" class="gps-location-display">
@@ -85,29 +81,44 @@
             <label for="categorySelect">Category</label>
             <select id="categorySelect">
               <option value="all">All Services</option>
-              <option value="hospital">Hospital</option>
-              <option value="medical">Medical</option>
-              <option value="doctor">Doctor</option>
-              <option value="dentist">Dentist</option>
-              <option value="clinic">Clinic</option>
-              <option value="pharmacy">Pharmacy</option>
-              <option value="grocery">Grocery</option>
-              <option value="kirana">Kirana Store</option>
-              <option value="supermarket">Supermarket</option>
-              <option value="restaurant">Restaurant</option>
-              <option value="food">Food</option>
-              <option value="cafe">Cafe</option>
-              <option value="bakery">Bakery</option>
-              <option value="clothing">Clothing</option>
-              <option value="footwear">Footwear</option>
-              <option value="electronics">Electronics</option>
-              <option value="atm">ATM</option>
-              <option value="bank">Bank</option>
-              <option value="petrol">Petrol Pump</option>
-              <option value="salon">Salon</option>
-              <option value="laundry">Laundry</option>
-              <option value="stationery">Stationery</option>
-              <option value="school">School</option>
+              <optgroup label="🏥 Health">
+                <option value="hospital">Hospital</option>
+                <option value="medical">Medical</option>
+                <option value="doctor">Doctor</option>
+                <option value="dentist">Dentist</option>
+                <option value="clinic">Clinic</option>
+                <option value="pharmacy">Pharmacy</option>
+              </optgroup>
+              <optgroup label="🛒 Shopping">
+                <option value="grocery">Grocery</option>
+                <option value="kirana">Kirana Store</option>
+                <option value="supermarket">Supermarket</option>
+                <option value="clothing">Clothing</option>
+                <option value="footwear">Footwear</option>
+                <option value="electronics">Electronics</option>
+                <option value="stationery">Stationery</option>
+              </optgroup>
+              <optgroup label="🍽️ Food & Drink">
+                <option value="restaurant">Restaurant</option>
+                <option value="food">Food</option>
+                <option value="cafe">Cafe</option>
+                <option value="bakery">Bakery</option>
+                <option value="juice">Juice Centre</option>
+                <option value="alcohol">Bar / Alcohol</option>
+              </optgroup>
+              <optgroup label="💪 Health & Fitness">
+                <option value="gym">Gym / Fitness</option>
+              </optgroup>
+              <optgroup label="🏦 Finance">
+                <option value="atm">ATM</option>
+                <option value="bank">Bank</option>
+              </optgroup>
+              <optgroup label="🚗 Services">
+                <option value="petrol">Petrol Pump</option>
+                <option value="salon">Salon</option>
+                <option value="laundry">Laundry</option>
+                <option value="school">School</option>
+              </optgroup>
             </select>
           </div>
 
@@ -123,6 +134,20 @@
 
           <button type="submit" id="searchBtn">Search Nearby</button>
         </form>
+
+        <!-- Category Quick Chips -->
+        <div class="category-chips" id="categoryChips">
+          <button class="cat-chip active" data-cat="all">🗺️ All</button>
+          <button class="cat-chip" data-cat="hospital">🏥 Hospital</button>
+          <button class="cat-chip" data-cat="pharmacy">💊 Pharmacy</button>
+          <button class="cat-chip" data-cat="restaurant">🍜 Restaurant</button>
+          <button class="cat-chip" data-cat="grocery">🛒 Grocery</button>
+          <button class="cat-chip" data-cat="gym">💪 Gym</button>
+          <button class="cat-chip" data-cat="atm">🏧 ATM</button>
+          <button class="cat-chip" data-cat="petrol">⛽ Petrol</button>
+          <button class="cat-chip" data-cat="juice">🥤 Juice</button>
+          <button class="cat-chip" data-cat="alcohol">🍺 Bar</button>
+        </div>
       </section>
 
       <!-- Toolbar -->
@@ -132,22 +157,66 @@
           <button class="tab-btn" data-tab="favorites">⭐ Favorites</button>
         </div>
         <div class="view-toggle-group">
-          <button class="view-btn active" id="listViewBtn" title="List view">☰ List</button>
-          <button class="view-btn" id="mapViewBtn" title="Map view">🗺️ Map</button>
+          <button class="view-btn active" id="listViewBtn">☰ List</button>
+          <button class="view-btn" id="mapViewBtn">🗺️ Map</button>
         </div>
-        <label class="toggle-chip">
-          <input id="phoneOnlyToggle" type="checkbox" />
-          <span>Only with phone</span>
-        </label>
-        <label class="toggle-chip">
-          <input id="homeDeliveryToggle" type="checkbox" />
-          <span>Home delivery</span>
-        </label>
-        <label class="toggle-chip">
-          <input id="openNowToggle" type="checkbox" />
-          <span>Open now</span>
-        </label>
+
+        <!-- Filters panel toggle -->
+        <button class="filter-toggle-btn" id="filterToggleBtn">
+          🔧 Filters <span id="activeFilterCount" class="filter-badge" style="display:none;">0</span>
+        </button>
+
         <button id="downloadBtn" class="download-btn" disabled>⬇ Download CSV</button>
+      </section>
+
+      <!-- Expanded Filters Panel -->
+      <section class="filters-panel" id="filtersPanel" style="display:none;">
+        <div class="filters-grid">
+          <div class="filter-group">
+            <label class="filter-label">Quick Filters</label>
+            <div class="toggle-chips-row">
+              <label class="toggle-chip">
+                <input id="phoneOnlyToggle" type="checkbox" />
+                <span>📞 Has phone</span>
+              </label>
+              <label class="toggle-chip">
+                <input id="homeDeliveryToggle" type="checkbox" />
+                <span>🚚 Home delivery</span>
+              </label>
+              <label class="toggle-chip">
+                <input id="openNowToggle" type="checkbox" />
+                <span>🟢 Open now</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="filter-group">
+            <label class="filter-label">Min Rating: <span id="ratingFilterLabel">Any</span></label>
+            <input type="range" id="ratingFilter" min="0" max="5" step="0.5" value="0" class="rating-slider" />
+            <div class="slider-marks">
+              <span>Any</span><span>3★</span><span>4★</span><span>5★</span>
+            </div>
+          </div>
+
+          <div class="filter-group">
+            <label class="filter-label">Search in results</label>
+            <div class="search-in-results-wrap">
+              <input type="text" id="nameFilterInput" placeholder="Filter by name…" class="name-filter-input" />
+              <button id="clearNameFilter" class="clear-filter-btn" style="display:none;">✕</button>
+            </div>
+          </div>
+
+          <div class="filter-group">
+            <label class="filter-label">Sort by</label>
+            <select id="sortSelect" class="sort-select">
+              <option value="smart">⚡ Smart (rating × reviews)</option>
+              <option value="distance">📍 Nearest first</option>
+              <option value="rating">⭐ Highest rated</option>
+              <option value="reviews">💬 Most reviewed</option>
+            </select>
+          </div>
+        </div>
+        <button class="clear-all-filters-btn" id="clearAllFilters">Clear all filters</button>
       </section>
 
       <!-- Info Row -->
@@ -190,7 +259,10 @@
       </section>
     </div>
 
-    <!-- ── FOOTER ── -->
+    <!-- Back to top FAB -->
+    <button id="backToTopBtn" class="back-to-top" title="Back to top" style="display:none;">↑</button>
+
+    <!-- FOOTER -->
     <footer class="site-footer">
       <div class="footer-inner">
         <div class="footer-brand">
@@ -204,7 +276,6 @@
       </div>
     </footer>
 
-    <!-- Leaflet JS -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
     <script src="script.js"></script>
   </body>

@@ -1,86 +1,106 @@
 /* ============================================================
-   Family Nearby Helper — script.js
-   Features: GPS auto-detect, text/pincode input, Leaflet map
-   view, suggestion dropdown, favorites, CSV download.
+   AasPaas — script.js  (v2)
+   New features: photo carousel, rating counts, weighted sort,
+   new categories (gym/juice/alcohol), advanced filters panel,
+   dark mode, skeleton loaders, share button, back-to-top FAB,
+   category quick-chips, in-result name search.
    ============================================================ */
 
 // ── DOM refs ────────────────────────────────────────────────
-const form = document.getElementById('searchForm');
-const pincodeInput = document.getElementById('pincodeInput');
-const suggestionsList = document.getElementById('suggestionsList');
-const categorySelect = document.getElementById('categorySelect');
-const radiusSelect = document.getElementById('radiusSelect');
-const phoneOnlyToggle = document.getElementById('phoneOnlyToggle');
-const homeDeliveryToggle = document.getElementById('homeDeliveryToggle');
-const openNowToggle = document.getElementById('openNowToggle');
-const downloadBtn = document.getElementById('downloadBtn');
-const resultsContainer = document.getElementById('resultsContainer');
-const statusMessage = document.getElementById('statusMessage');
-const locationText = document.getElementById('locationText');
-const precisionText = document.getElementById('precisionText');
-const resultCount = document.getElementById('resultCount');
-const apiMode = document.getElementById('apiMode');
-const largeTextBtn = document.getElementById('largeTextBtn');
-const langToggleBtn = document.getElementById('langToggleBtn');
-const voiceSearchBtn = document.getElementById('voiceSearchBtn');
-const pageTitleLocation = document.getElementById('pageTitleLocation');
-const tabs = document.querySelectorAll('.tab-btn');
-const listViewBtn = document.getElementById('listViewBtn');
-const mapViewBtn = document.getElementById('mapViewBtn');
-const listViewEl = document.getElementById('listView');
-const mapViewEl = document.getElementById('mapView');
-const gpsStatusBar = document.getElementById('gpsStatusBar');
-const gpsStatusIcon = document.getElementById('gpsStatusIcon');
-const gpsStatusText = document.getElementById('gpsStatusText');
-const detectLocationBtn = document.getElementById('detectLocationBtn');
-const textInputWrap = document.getElementById('textInputWrap');
-const gpsInputWrap = document.getElementById('gpsInputWrap');
-const gpsLocationName = document.getElementById('gpsLocationName');
-const mapSidebarHint = document.querySelector('.map-sidebar-hint');
-const mapPlaceDetail = document.getElementById('mapPlaceDetail');
-const footerYear = document.getElementById('footerYear');
+const form                = document.getElementById('searchForm');
+const pincodeInput        = document.getElementById('pincodeInput');
+const suggestionsList     = document.getElementById('suggestionsList');
+const categorySelect      = document.getElementById('categorySelect');
+const radiusSelect        = document.getElementById('radiusSelect');
+const phoneOnlyToggle     = document.getElementById('phoneOnlyToggle');
+const homeDeliveryToggle  = document.getElementById('homeDeliveryToggle');
+const openNowToggle       = document.getElementById('openNowToggle');
+const downloadBtn         = document.getElementById('downloadBtn');
+const resultsContainer    = document.getElementById('resultsContainer');
+const statusMessage       = document.getElementById('statusMessage');
+const locationText        = document.getElementById('locationText');
+const precisionText       = document.getElementById('precisionText');
+const resultCount         = document.getElementById('resultCount');
+const apiMode             = document.getElementById('apiMode');
+const largeTextBtn        = document.getElementById('largeTextBtn');
+const langToggleBtn       = document.getElementById('langToggleBtn');
+const voiceSearchBtn      = document.getElementById('voiceSearchBtn');
+const darkModeBtn         = document.getElementById('darkModeBtn');
+const pageTitleLocation   = document.getElementById('pageTitleLocation');
+const tabs                = document.querySelectorAll('.tab-btn');
+const listViewBtn         = document.getElementById('listViewBtn');
+const mapViewBtn          = document.getElementById('mapViewBtn');
+const listViewEl          = document.getElementById('listView');
+const mapViewEl           = document.getElementById('mapView');
+const gpsStatusBar        = document.getElementById('gpsStatusBar');
+const gpsStatusIcon       = document.getElementById('gpsStatusIcon');
+const gpsStatusText       = document.getElementById('gpsStatusText');
+const detectLocationBtn   = document.getElementById('detectLocationBtn');
+const textInputWrap       = document.getElementById('textInputWrap');
+const gpsInputWrap        = document.getElementById('gpsInputWrap');
+const gpsLocationName     = document.getElementById('gpsLocationName');
+const mapSidebarHint      = document.querySelector('.map-sidebar-hint');
+const mapPlaceDetail      = document.getElementById('mapPlaceDetail');
+const footerYear          = document.getElementById('footerYear');
+const filterToggleBtn     = document.getElementById('filterToggleBtn');
+const filtersPanel        = document.getElementById('filtersPanel');
+const ratingFilter        = document.getElementById('ratingFilter');
+const ratingFilterLabel   = document.getElementById('ratingFilterLabel');
+const nameFilterInput     = document.getElementById('nameFilterInput');
+const clearNameFilter     = document.getElementById('clearNameFilter');
+const sortSelect          = document.getElementById('sortSelect');
+const clearAllFilters     = document.getElementById('clearAllFilters');
+const activeFilterCount   = document.getElementById('activeFilterCount');
+const backToTopBtn        = document.getElementById('backToTopBtn');
+const categoryChips       = document.getElementById('categoryChips');
 
 // ── State ───────────────────────────────────────────────────
-let currentResults = [];
-let currentCenter = null;
+let currentResults  = [];
+let currentCenter   = null;
 let suggestionTimer = null;
-let currentTab = 'all';
-let currentView = 'list';
-let isLargeText = false;
-let isHindi = false;
+let currentTab      = 'all';
+let currentView     = 'list';
+let isLargeText     = false;
+let isHindi         = false;
+let isDark          = false;
 let recognition;
-let favorites = [];
-let locationMode = 'text';   // 'text' | 'gps'
-let gpsCoords = null;     // { lat, lng } when GPS detected
-let leafletMap = null;
-let mapMarkers = [];
+let favorites       = [];
+let locationMode    = 'text';
+let gpsCoords       = null;
+let leafletMap      = null;
+let mapMarkers      = [];
+// carousel state per card: { placeId: { idx, timer } }
+let carouselState   = {};
 
 // ── Category config ─────────────────────────────────────────
 const categoryConfig = {
-  all: { icon: '🗺️', color: 'blue', label: 'All', labelHindi: 'सभी' },
-  hospital: { icon: '🏥', color: 'red', label: 'Hospital', labelHindi: 'अस्पताल' },
-  medical: { icon: '🩺', color: 'red', label: 'Medical', labelHindi: 'मेडिकल' },
-  doctor: { icon: '🩺', color: 'red', label: 'Doctor', labelHindi: 'डॉक्टर' },
-  dentist: { icon: '🦷', color: 'red', label: 'Dentist', labelHindi: 'दांत का डॉक्टर' },
-  clinic: { icon: '🩹', color: 'red', label: 'Clinic', labelHindi: 'क्लिनिक' },
-  pharmacy: { icon: '💊', color: 'green', label: 'Pharmacy', labelHindi: 'दवा दुकान' },
-  grocery: { icon: '🛒', color: 'orange', label: 'Grocery', labelHindi: 'किराना' },
-  kirana: { icon: '🛍️', color: 'orange', label: 'Kirana', labelHindi: 'किराना' },
-  supermarket: { icon: '🏬', color: 'orange', label: 'Supermarket', labelHindi: 'सुपरमार्केट' },
-  food: { icon: '🍽️', color: 'blue', label: 'Food', labelHindi: 'भोजन' },
-  restaurant: { icon: '🍜', color: 'blue', label: 'Restaurant', labelHindi: 'रेस्टोरेंट' },
-  cafe: { icon: '☕', color: 'blue', label: 'Cafe', labelHindi: 'कैफे' },
-  bakery: { icon: '🥐', color: 'blue', label: 'Bakery', labelHindi: 'बेकरी' },
-  clothing: { icon: '👕', color: 'blue', label: 'Clothing', labelHindi: 'कपड़े' },
-  footwear: { icon: '👟', color: 'blue', label: 'Footwear', labelHindi: 'जूते' },
-  electronics: { icon: '📱', color: 'blue', label: 'Electronics', labelHindi: 'इलेक्ट्रॉनिक्स' },
-  atm: { icon: '🏧', color: 'blue', label: 'ATM', labelHindi: 'ATM' },
-  bank: { icon: '🏦', color: 'blue', label: 'Bank', labelHindi: 'बैंक' },
-  petrol: { icon: '⛽', color: 'blue', label: 'Petrol', labelHindi: 'पेट्रोल' },
-  salon: { icon: '💇', color: 'blue', label: 'Salon', labelHindi: 'सैलून' },
-  laundry: { icon: '🧺', color: 'blue', label: 'Laundry', labelHindi: 'धुलाई' },
-  stationery: { icon: '📚', color: 'blue', label: 'Stationery', labelHindi: 'स्टेशनरी' },
-  school: { icon: '🏫', color: 'blue', label: 'School', labelHindi: 'स्कूल' },
+  all:          { icon: '🗺️',  color: 'blue',   label: 'All',           labelHindi: 'सभी' },
+  hospital:     { icon: '🏥',  color: 'red',    label: 'Hospital',      labelHindi: 'अस्पताल' },
+  medical:      { icon: '🩺',  color: 'red',    label: 'Medical',       labelHindi: 'मेडिकल' },
+  doctor:       { icon: '🩺',  color: 'red',    label: 'Doctor',        labelHindi: 'डॉक्टर' },
+  dentist:      { icon: '🦷',  color: 'red',    label: 'Dentist',       labelHindi: 'दांत का डॉक्टर' },
+  clinic:       { icon: '🩹',  color: 'red',    label: 'Clinic',        labelHindi: 'क्लिनिक' },
+  pharmacy:     { icon: '💊',  color: 'green',  label: 'Pharmacy',      labelHindi: 'दवा दुकान' },
+  grocery:      { icon: '🛒',  color: 'orange', label: 'Grocery',       labelHindi: 'किराना' },
+  kirana:       { icon: '🛍️',  color: 'orange', label: 'Kirana',        labelHindi: 'किराना' },
+  supermarket:  { icon: '🏬',  color: 'orange', label: 'Supermarket',   labelHindi: 'सुपरमार्केट' },
+  food:         { icon: '🍽️',  color: 'blue',   label: 'Food',          labelHindi: 'भोजन' },
+  restaurant:   { icon: '🍜',  color: 'blue',   label: 'Restaurant',    labelHindi: 'रेस्टोरेंट' },
+  cafe:         { icon: '☕',  color: 'blue',   label: 'Cafe',          labelHindi: 'कैफे' },
+  bakery:       { icon: '🥐',  color: 'blue',   label: 'Bakery',        labelHindi: 'बेकरी' },
+  juice:        { icon: '🥤',  color: 'green',  label: 'Juice Centre',  labelHindi: 'जूस सेंटर' },
+  alcohol:      { icon: '🍺',  color: 'orange', label: 'Bar / Alcohol', labelHindi: 'शराब / बार' },
+  gym:          { icon: '💪',  color: 'purple', label: 'Gym / Fitness', labelHindi: 'जिम' },
+  clothing:     { icon: '👕',  color: 'blue',   label: 'Clothing',      labelHindi: 'कपड़े' },
+  footwear:     { icon: '👟',  color: 'blue',   label: 'Footwear',      labelHindi: 'जूते' },
+  electronics:  { icon: '📱',  color: 'blue',   label: 'Electronics',   labelHindi: 'इलेक्ट्रॉनिक्स' },
+  atm:          { icon: '🏧',  color: 'blue',   label: 'ATM',           labelHindi: 'ATM' },
+  bank:         { icon: '🏦',  color: 'blue',   label: 'Bank',          labelHindi: 'बैंक' },
+  petrol:       { icon: '⛽',  color: 'blue',   label: 'Petrol',        labelHindi: 'पेट्रोल' },
+  salon:        { icon: '💇',  color: 'blue',   label: 'Salon',         labelHindi: 'सैलून' },
+  laundry:      { icon: '🧺',  color: 'blue',   label: 'Laundry',       labelHindi: 'धुलाई' },
+  stationery:   { icon: '📚',  color: 'blue',   label: 'Stationery',    labelHindi: 'स्टेशनरी' },
+  school:       { icon: '🏫',  color: 'blue',   label: 'School',        labelHindi: 'स्कूल' },
 };
 
 // ── Helpers ─────────────────────────────────────────────────
@@ -122,22 +142,33 @@ function getPrecisionLabel(data) {
 
 function escapeHtml(text) {
   return String(text || '')
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;');
+    .replaceAll('&', '&amp;').replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
 }
 
 function getCategoryTag(category) {
   return categoryConfig[category] || { icon: '📍', color: 'blue', label: category };
 }
 
+// Weighted score: rating × log(reviewCount + 1)
+function weightedScore(rating, reviewCount) {
+  const r = Number(rating) || 0;
+  const c = Number(reviewCount) || 0;
+  return r * Math.log1p(c + 1);
+}
+
+// ── Dark Mode ────────────────────────────────────────────────
+function toggleDarkMode() {
+  isDark = !isDark;
+  document.body.classList.toggle('dark', isDark);
+  darkModeBtn.textContent = isDark ? '☀️' : '🌙';
+  localStorage.setItem('aaspaas_dark', isDark ? '1' : '0');
+}
+
 // ── Favorites ───────────────────────────────────────────────
 function saveFavorites() {
   localStorage.setItem('familyNearbyFavorites', JSON.stringify(favorites));
 }
-
 function loadFavorites() {
   try { return JSON.parse(localStorage.getItem('familyNearbyFavorites') || '[]'); }
   catch { return []; }
@@ -157,7 +188,6 @@ function saveSearchState() {
   };
   localStorage.setItem('familyNearbyLastSearch', JSON.stringify(state));
 }
-
 function loadSearchState() {
   try { return JSON.parse(localStorage.getItem('familyNearbyLastSearch') || 'null'); }
   catch { return null; }
@@ -165,11 +195,9 @@ function loadSearchState() {
 
 // ── Location Mode ────────────────────────────────────────────
 const locModeBtns = document.querySelectorAll('.loc-mode-btn');
-
 function setLocationMode(mode) {
   locationMode = mode;
   locModeBtns.forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
-
   if (mode === 'text') {
     textInputWrap.style.display = '';
     gpsInputWrap.style.display = 'none';
@@ -180,10 +208,7 @@ function setLocationMode(mode) {
     gpsStatusBar.style.display = '';
   }
 }
-
-locModeBtns.forEach(btn => {
-  btn.addEventListener('click', () => setLocationMode(btn.dataset.mode));
-});
+locModeBtns.forEach(btn => btn.addEventListener('click', () => setLocationMode(btn.dataset.mode)));
 
 // ── GPS Detection ────────────────────────────────────────────
 function setGpsStatus(icon, text, loading = false) {
@@ -208,29 +233,25 @@ async function reverseGeocode(lat, lng) {
 
 detectLocationBtn.addEventListener('click', () => {
   if (!navigator.geolocation) {
-    setGpsStatus('❌', 'Geolocation is not supported by your browser.');
+    setGpsStatus('❌', 'Geolocation not supported by your browser.');
     return;
   }
   setGpsStatus('⏳', 'Detecting your location…', true);
-
   navigator.geolocation.getCurrentPosition(
     async (pos) => {
       const { latitude: lat, longitude: lng, accuracy } = pos.coords;
       gpsCoords = { lat, lng };
-
       setGpsStatus('✅', 'Location detected! Fetching address…', true);
       const name = await reverseGeocode(lat, lng);
       gpsLocationName.textContent = name;
       setGpsStatus('✅', `Accuracy: ~${Math.round(accuracy)} m. Ready to search.`);
-
-      // Auto-search
       await searchNearby();
     },
     (err) => {
       const msgs = {
-        1: 'Permission denied. Please allow location access in your browser.',
+        1: 'Permission denied. Please allow location access.',
         2: 'Position unavailable. Try typing your location instead.',
-        3: 'Location request timed out. Please try again.',
+        3: 'Request timed out. Please try again.',
       };
       setGpsStatus('❌', msgs[err.code] || 'Could not detect location.');
     },
@@ -238,11 +259,80 @@ detectLocationBtn.addEventListener('click', () => {
   );
 });
 
+// ── Category Chips ───────────────────────────────────────────
+document.querySelectorAll('.cat-chip').forEach(chip => {
+  chip.addEventListener('click', () => {
+    document.querySelectorAll('.cat-chip').forEach(c => c.classList.remove('active'));
+    chip.classList.add('active');
+    categorySelect.value = chip.dataset.cat;
+    if (currentResults.length > 0) searchNearby();
+  });
+});
+
+// Keep chips in sync when select changes
+categorySelect.addEventListener('change', () => {
+  document.querySelectorAll('.cat-chip').forEach(c => {
+    c.classList.toggle('active', c.dataset.cat === categorySelect.value);
+  });
+});
+
+// ── Filters Panel ─────────────────────────────────────────────
+filterToggleBtn.addEventListener('click', () => {
+  const open = filtersPanel.style.display !== 'none';
+  filtersPanel.style.display = open ? 'none' : '';
+  filterToggleBtn.classList.toggle('active', !open);
+});
+
+ratingFilter.addEventListener('input', () => {
+  const v = Number(ratingFilter.value);
+  ratingFilterLabel.textContent = v === 0 ? 'Any' : `${v}★+`;
+  updateActiveFilterCount();
+  renderResults();
+});
+
+nameFilterInput.addEventListener('input', () => {
+  clearNameFilter.style.display = nameFilterInput.value ? '' : 'none';
+  updateActiveFilterCount();
+  renderResults();
+});
+
+clearNameFilter.addEventListener('click', () => {
+  nameFilterInput.value = '';
+  clearNameFilter.style.display = 'none';
+  updateActiveFilterCount();
+  renderResults();
+});
+
+sortSelect.addEventListener('change', renderResults);
+
+clearAllFilters.addEventListener('click', () => {
+  phoneOnlyToggle.checked = false;
+  homeDeliveryToggle.checked = false;
+  openNowToggle.checked = false;
+  ratingFilter.value = 0;
+  ratingFilterLabel.textContent = 'Any';
+  nameFilterInput.value = '';
+  clearNameFilter.style.display = 'none';
+  sortSelect.value = 'smart';
+  updateActiveFilterCount();
+  renderResults();
+});
+
+function updateActiveFilterCount() {
+  let count = 0;
+  if (phoneOnlyToggle.checked)    count++;
+  if (homeDeliveryToggle.checked) count++;
+  if (openNowToggle.checked)      count++;
+  if (Number(ratingFilter.value) > 0) count++;
+  if (nameFilterInput.value.trim()) count++;
+  activeFilterCount.textContent = count;
+  activeFilterCount.style.display = count > 0 ? '' : 'none';
+}
+
 // ── Suggestions ──────────────────────────────────────────────
 function showSuggestions(items) {
   suggestionsList.innerHTML = '';
   if (!items.length) { suggestionsList.style.display = 'none'; return; }
-
   items.forEach(item => {
     const li = document.createElement('li');
     li.innerHTML = `<span class="sug-icon">📍</span>${escapeHtml(item.value)}`;
@@ -259,18 +349,14 @@ function showSuggestions(items) {
 async function fetchSuggestions() {
   const query = pincodeInput.value.trim();
   if (!query || query.length < 3) { suggestionsList.style.display = 'none'; return; }
-
-  // Try local Nominatim suggestions for Indian locations
   try {
     const resp = await fetch(
       `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=in&limit=6&addressdetails=0`,
       { headers: { 'Accept-Language': 'en' } }
     );
     const data = await resp.json();
-    const suggestions = data.map(d => ({ value: d.display_name }));
-    showSuggestions(suggestions);
+    showSuggestions(data.map(d => ({ value: d.display_name })));
   } catch {
-    // Fallback to app API if available
     try {
       const resp2 = await fetch(`/api/suggest?query=${encodeURIComponent(query)}`);
       const data2 = await resp2.json();
@@ -285,33 +371,104 @@ pincodeInput.addEventListener('input', () => {
   clearTimeout(suggestionTimer);
   suggestionTimer = setTimeout(fetchSuggestions, 280);
 });
-
 pincodeInput.addEventListener('focus', fetchSuggestions);
-
 document.addEventListener('click', e => {
-  if (!e.target.closest('.suggestion-wrap')) {
-    suggestionsList.style.display = 'none';
-  }
+  if (!e.target.closest('.suggestion-wrap')) suggestionsList.style.display = 'none';
 });
 
-// ── Filters & Rendering ──────────────────────────────────────
-function applyFilters() {
-  const phoneOnly = phoneOnlyToggle.checked;
-  const deliveryOnly = homeDeliveryToggle.checked;
-  const openOnly = openNowToggle.checked;
-  const favSet = new Set(favorites);
+// ── Photo Carousel ───────────────────────────────────────────
+function buildPhotoCarousel(place, tag) {
+  const photos = place.photos || [];
+  const wrap = document.createElement('div');
+  wrap.className = 'photo-carousel';
 
-  const radiusKm = Number(radiusSelect.value) / 1000;
+  if (photos.length === 0) {
+    wrap.innerHTML = `<div class="no-photo">${tag.icon}</div>`;
+  } else {
+    photos.forEach((url, i) => {
+      const img = document.createElement('img');
+      img.src = url;
+      img.alt = place.name;
+      img.loading = 'lazy';
+      if (i === 0) img.classList.add('active');
+      img.onerror = () => { img.style.display = 'none'; };
+      wrap.appendChild(img);
+    });
+
+    if (photos.length > 1) {
+      const dotsWrap = document.createElement('div');
+      dotsWrap.className = 'photo-dots';
+      photos.forEach((_, i) => {
+        const dot = document.createElement('span');
+        dot.className = 'photo-dot' + (i === 0 ? ' active' : '');
+        dotsWrap.appendChild(dot);
+      });
+      wrap.appendChild(dotsWrap);
+
+      let hoverTimer = null;
+      const state = { idx: 0 };
+      carouselState[place.placeId] = state;
+
+      const imgs = wrap.querySelectorAll('img');
+      const dots = wrap.querySelectorAll('.photo-dot');
+
+      function advanceCarousel() {
+        imgs[state.idx].classList.remove('active');
+        dots[state.idx].classList.remove('active');
+        state.idx = (state.idx + 1) % imgs.length;
+        imgs[state.idx].classList.add('active');
+        dots[state.idx].classList.add('active');
+      }
+
+      wrap.addEventListener('mouseenter', () => {
+        hoverTimer = setInterval(advanceCarousel, 900);
+      });
+      wrap.addEventListener('mouseleave', () => {
+        clearInterval(hoverTimer);
+      });
+    }
+  }
+
+  if (place.distanceKm < 1) {
+    const badge = document.createElement('span');
+    badge.className = 'near-me-badge';
+    badge.textContent = '📍 Near me';
+    wrap.appendChild(badge);
+  }
+
+  return wrap;
+}
+
+// ── Filters & Sort ───────────────────────────────────────────
+function applyFilters() {
+  const phoneOnly    = phoneOnlyToggle.checked;
+  const deliveryOnly = homeDeliveryToggle.checked;
+  const openOnly     = openNowToggle.checked;
+  const minRating    = Number(ratingFilter.value);
+  const nameQuery    = nameFilterInput.value.trim().toLowerCase();
+  const favSet       = new Set(favorites);
+  const radiusKm     = Number(radiusSelect.value) / 1000;
+  const sort         = sortSelect.value;
 
   let filtered = currentResults.filter(p =>
     p.distanceKm <= radiusKm &&
-    (!phoneOnly || !!p.phone) &&
+    (!phoneOnly    || !!p.phone) &&
     (!deliveryOnly || !!p.delivery) &&
-    (!openOnly || p.openNow === true) &&
+    (!openOnly     || p.openNow === true) &&
+    (!minRating    || (Number(p.rating) || 0) >= minRating) &&
+    (!nameQuery    || (p.name || '').toLowerCase().includes(nameQuery)) &&
     (currentTab !== 'favorites' || favSet.has(p.placeId))
   );
 
   filtered.sort((a, b) => {
+    if (sort === 'distance') return a.distanceKm - b.distanceKm;
+    if (sort === 'rating')   return (Number(b.rating) || 0) - (Number(a.rating) || 0);
+    if (sort === 'reviews')  return (Number(b.reviewCount) || 0) - (Number(a.reviewCount) || 0);
+    // smart: weighted score (default)
+    const scoreB = weightedScore(b.rating, b.reviewCount);
+    const scoreA = weightedScore(a.rating, a.reviewCount);
+    if (Math.abs(scoreB - scoreA) > 0.5) return scoreB - scoreA;
+    // tiebreak by open status then distance
     if (a.openNow !== b.openNow) return Number(b.openNow) - Number(a.openNow);
     return a.distanceKm - b.distanceKm;
   });
@@ -319,9 +476,28 @@ function applyFilters() {
   return filtered;
 }
 
+// ── Render Skeletons ─────────────────────────────────────────
+function renderSkeletons(count = 6) {
+  resultsContainer.innerHTML = '';
+  for (let i = 0; i < count; i++) {
+    const card = document.createElement('div');
+    card.className = 'skeleton-card';
+    card.innerHTML = `
+      <div class="skeleton skeleton-photo"></div>
+      <div class="skeleton skeleton-title"></div>
+      <div class="skeleton skeleton-subtitle"></div>
+      <div class="skeleton skeleton-meta"></div>
+      <div class="skeleton skeleton-actions"></div>
+    `;
+    resultsContainer.appendChild(card);
+  }
+}
+
+// ── Render Results ───────────────────────────────────────────
 function renderResults() {
   const filtered = applyFilters();
   resultsContainer.innerHTML = '';
+  updateActiveFilterCount();
 
   if (!filtered.length) {
     setStatus('No matching places found. Try removing a filter.', 'error');
@@ -335,59 +511,96 @@ function renderResults() {
   downloadBtn.disabled = false;
   setStatus(`Showing ${filtered.length} ${getCategoryTag(categorySelect.value).label} locations.`);
 
+  const T = translations[isHindi ? 'hi' : 'en'];
+
   filtered.forEach(place => {
-    const tag = getCategoryTag(place.category || categorySelect.value);
-    const isFav = favorites.includes(place.placeId);
+    const tag    = getCategoryTag(place.category || categorySelect.value);
+    const isFav  = favorites.includes(place.placeId);
     const rating = place.rating ? Number(place.rating) : 0;
-    const rCls = rating >= 4.5 ? 'good' : rating >= 3.5 ? 'ok' : 'bad';
-    const openCls = place.openNow === true ? 'green' : place.openNow === false ? 'red' : 'orange';
+    const rCls   = rating >= 4.5 ? 'good' : rating >= 3.5 ? 'ok' : 'bad';
+    const openCls   = place.openNow === true ? 'green' : place.openNow === false ? 'red' : 'orange';
     const openLabel = place.openNow === true ? 'Open now' : place.openNow === false ? 'Closed' : 'Hours unavailable';
+    const reviewCount = Number(place.reviewCount) || 0;
+    const countStr = reviewCount > 0 ? ` (${reviewCount.toLocaleString()})` : '';
+    const phone   = (place.phone || '').replace(/[^0-9]/g, '');
 
     const card = document.createElement('article');
     card.className = 'result-card';
-    card.innerHTML = `
+
+    // Photo carousel
+    const carousel = buildPhotoCarousel(place, tag);
+    card.appendChild(carousel);
+
+    // Card body
+    const body = document.createElement('div');
+    body.className = 'card-body';
+    body.innerHTML = `
       <div class="result-card-header">
         <div>
-          <span class="badge ${tag.color}">${tag.icon} ${tag.label}</span>
+          <span class="badge ${tag.color}">${tag.icon} ${escapeHtml(tag.label)}</span>
           <h3>${escapeHtml(place.name)}</h3>
         </div>
-        <button class="favorite-btn" data-favorite="${escapeHtml(place.placeId)}">${isFav ? '★' : '☆'}</button>
+        <button class="favorite-btn" data-favorite="${escapeHtml(place.placeId)}" title="${isFav ? 'Remove from favorites' : 'Add to favorites'}">${isFav ? '★' : '☆'}</button>
       </div>
-      <div class="result-card-body">
-        <p class="result-address">${escapeHtml(place.address)}</p>
-        <div class="result-meta">
-          <span class="rating-pill ${rCls}">${place.rating ? `${place.rating} ★` : 'No rating'}</span>
-          <span class="badge ${openCls}">${openLabel}</span>
-        </div>
-        <p class="distance-line"><strong>Distance:</strong> ${formatDistance(place.distanceKm)}</p>
+      <p class="result-address">${escapeHtml(place.address)}</p>
+      <div class="result-meta">
+        <span class="rating-pill ${rCls}">
+          ${place.rating ? `${place.rating} ★` : 'No rating'}
+          <span class="review-count">${countStr}</span>
+        </span>
+        <span class="badge ${openCls}">${openLabel}</span>
       </div>
-      <div class="card-actions">
-        ${place.phone ? `<a class="primary" href="tel:${escapeHtml(place.phone)}">📞 Call</a>` : ''}
-        ${place.website ? `<a href="${escapeHtml(place.website)}" target="_blank">🌐 Website</a>` : ''}
-        ${place.phone ? `<a href="https://wa.me/${encodeURIComponent(place.phone.replace(/[^0-9]/g, ''))}" target="_blank">💬 WhatsApp</a>` : ''}
-        ${place.lat && place.lng ? `<a href="https://www.google.com/maps/dir/?api=1&destination=${place.lat},${place.lng}" target="_blank">🗺️ Maps</a>` : ''}
-        <button type="button" data-copy="${escapeHtml(place.name)}">${translations[isHindi ? 'hi' : 'en'].copyName}</button>
-        ${place.phone ? `<button type="button" data-copy-phone="${escapeHtml(place.phone)}">${translations[isHindi ? 'hi' : 'en'].copyPhone}</button>` : ''}
-      </div>
+      <p class="distance-line"><strong>${formatDistance(place.distanceKm)}</strong> away</p>
     `;
+    card.appendChild(body);
 
-    card.querySelector('[data-copy]').addEventListener('click', () => {
+    // Actions
+    const actions = document.createElement('div');
+    actions.className = 'card-actions';
+    actions.innerHTML = `
+      ${place.phone ? `<a class="primary" href="tel:${escapeHtml(place.phone)}">📞 Call</a>` : ''}
+      ${place.phone ? `<a href="https://wa.me/${encodeURIComponent(phone)}" target="_blank">💬 WhatsApp</a>` : ''}
+      ${place.website ? `<a href="${escapeHtml(place.website)}" target="_blank">🌐 Website</a>` : ''}
+      ${place.lat && place.lng ? `<a href="https://www.google.com/maps/dir/?api=1&destination=${place.lat},${place.lng}" target="_blank">🗺️ Maps</a>` : ''}
+      <button type="button" data-copy="${escapeHtml(place.name)}">${T.copyName}</button>
+      ${place.phone ? `<button type="button" data-copy-phone="${escapeHtml(place.phone)}">${T.copyPhone}</button>` : ''}
+      <button type="button" data-share="${escapeHtml(place.placeId)}">📤 Share</button>
+    `;
+    card.appendChild(actions);
+
+    // Listeners
+    body.querySelector('[data-favorite]').addEventListener('click', () => {
+      const id = place.placeId;
+      favorites = favorites.includes(id) ? favorites.filter(f => f !== id) : [...favorites, id];
+      saveFavorites();
+      renderResults();
+    });
+
+    actions.querySelector('[data-copy]').addEventListener('click', () => {
       navigator.clipboard.writeText(place.name).then(() => setStatus(`Copied: ${place.name}`));
     });
 
-    const phBtn = card.querySelector('[data-copy-phone]');
+    const phBtn = actions.querySelector('[data-copy-phone]');
     if (phBtn) {
       phBtn.addEventListener('click', () => {
         navigator.clipboard.writeText(place.phone).then(() => setStatus(`Copied phone: ${place.phone}`));
       });
     }
 
-    card.querySelector('[data-favorite]').addEventListener('click', () => {
-      const id = place.placeId;
-      favorites = favorites.includes(id) ? favorites.filter(f => f !== id) : [...favorites, id];
-      saveFavorites();
-      renderResults();
-    });
+    const shareBtn = actions.querySelector('[data-share]');
+    if (shareBtn) {
+      shareBtn.addEventListener('click', () => {
+        const mapsLink = place.lat && place.lng
+          ? `https://www.google.com/maps?q=${place.lat},${place.lng}`
+          : '';
+        const text = `📍 *${place.name}*\n${place.address}\n${place.phone ? '📞 ' + place.phone + '\n' : ''}${mapsLink ? '🗺️ ' + mapsLink : ''}`;
+        if (navigator.share) {
+          navigator.share({ title: place.name, text });
+        } else {
+          navigator.clipboard.writeText(text).then(() => setStatus('Place details copied to clipboard!'));
+        }
+      });
+    }
 
     resultsContainer.appendChild(card);
   });
@@ -398,15 +611,11 @@ function renderResults() {
 // ── Map View ─────────────────────────────────────────────────
 function initMap(center) {
   if (leafletMap) { leafletMap.remove(); leafletMap = null; }
-
   leafletMap = L.map('mapContainer').setView([center.lat, center.lng], 13);
-
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
     maxZoom: 19,
   }).addTo(leafletMap);
-
-  // Center marker
   L.circleMarker([center.lat, center.lng], {
     radius: 8, color: '#0f6fff', fillColor: '#0f6fff', fillOpacity: 0.9, weight: 2
   }).addTo(leafletMap).bindPopup('<div class="map-popup-inner"><strong>📍 Search Center</strong></div>');
@@ -420,19 +629,14 @@ function clearMap() {
 function renderMap(places) {
   if (!leafletMap || !currentCenter) return;
   clearMap();
-
-  // Reset sidebar
   mapPlaceDetail.style.display = 'none';
-  mapPlaceDetail.innerHTML = '';
   mapSidebarHint.style.display = '';
 
   const bounds = [[currentCenter.lat, currentCenter.lng]];
 
-  places.forEach((place) => {
+  places.forEach(place => {
     if (!place.lat || !place.lng) return;
-
     const tag = getCategoryTag(place.category || categorySelect.value);
-
     const icon = L.divIcon({
       className: '',
       html: `<div style="
@@ -442,117 +646,78 @@ function renderMap(places) {
         width:32px;height:32px;
         display:flex;align-items:center;justify-content:center;
         font-size:14px;border:2px solid #fff;
-        box-shadow:0 2px 8px rgba(0,0,0,0.3);
-        cursor:pointer;
+        box-shadow:0 2px 8px rgba(0,0,0,0.3);cursor:pointer;
       "><span style="transform:rotate(45deg)">${tag.icon}</span></div>`,
-      iconSize: [32, 32],
-      iconAnchor: [16, 32],
-      popupAnchor: [0, -36],
+      iconSize: [32, 32], iconAnchor: [16, 32], popupAnchor: [0, -36],
     });
 
-    // Snapshot the place data into a local const so closure is stable
     const placeData = { ...place };
-
-    const marker = L.marker([placeData.lat, placeData.lng], { icon })
-      .addTo(leafletMap);
-
+    const marker = L.marker([placeData.lat, placeData.lng], { icon }).addTo(leafletMap);
     marker.bindPopup(`
       <div class="map-popup-inner">
         <strong>${escapeHtml(placeData.name)}</strong><br/>
         <span>${tag.icon} ${tag.label} &nbsp;·&nbsp; ${formatDistance(placeData.distanceKm)} away</span>
       </div>
     `);
-
-    // Use both click and popupopen so detail shows reliably
-    marker.on('click', function () {
-      showMapPlaceDetail(placeData);
-    });
-
-    marker.on('popupopen', function () {
-      showMapPlaceDetail(placeData);
-    });
-
+    marker.on('click',     () => showMapPlaceDetail(placeData));
+    marker.on('popupopen', () => showMapPlaceDetail(placeData));
     mapMarkers.push(marker);
     bounds.push([placeData.lat, placeData.lng]);
   });
 
-  if (bounds.length > 1) {
-    leafletMap.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
-  } else {
-    leafletMap.setView([currentCenter.lat, currentCenter.lng], 13);
-  }
-
-  // Force Leaflet to recalculate container size (fixes blank map on tab switch)
+  if (bounds.length > 1) leafletMap.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
+  else leafletMap.setView([currentCenter.lat, currentCenter.lng], 13);
   setTimeout(() => leafletMap.invalidateSize(), 100);
 }
 
 function showMapPlaceDetail(place) {
   const tag = getCategoryTag(place.category || categorySelect.value);
-  const openLabel = place.openNow === true
-    ? '🟢 Open now'
-    : place.openNow === false
-      ? '🔴 Closed'
-      : '🟡 Hours unknown';
-
-  const phone = place.phone ? place.phone.replace(/[^0-9]/g, '') : '';
+  const openLabel = place.openNow === true ? '🟢 Open now' : place.openNow === false ? '🔴 Closed' : '🟡 Hours unknown';
+  const phone = (place.phone || '').replace(/[^0-9]/g, '');
+  const reviewCount = Number(place.reviewCount) || 0;
+  const countStr = reviewCount > 0 ? ` (${reviewCount.toLocaleString()})` : '';
 
   mapPlaceDetail.innerHTML = `
-    <span class="badge ${tag.color}" style="margin-bottom:10px;display:inline-flex;">
-      ${tag.icon} ${tag.label}
-    </span>
+    <span class="badge ${tag.color}" style="margin-bottom:10px;display:inline-flex;">${tag.icon} ${tag.label}</span>
     <h3>${escapeHtml(place.name)}</h3>
-    <p style="margin:6px 0 4px;">${escapeHtml(place.address || 'Address not available')}</p>
+    <p>${escapeHtml(place.address || 'Address not available')}</p>
     <p>${openLabel} &nbsp;·&nbsp; <strong>${formatDistance(place.distanceKm)}</strong></p>
-    ${place.rating ? `<p style="margin-top:4px;">⭐ ${place.rating} rating</p>` : ''}
+    ${place.rating ? `<p>⭐ ${place.rating} ★${countStr}</p>` : ''}
     <div class="mpd-actions">
-      ${place.phone
-      ? `<a class="primary" href="tel:${escapeHtml(place.phone)}">📞 Call</a>`
-      : ''}
-      ${place.phone
-      ? `<a href="https://wa.me/${encodeURIComponent(phone)}" target="_blank">💬 WhatsApp</a>`
-      : ''}
-      ${place.website
-      ? `<a href="${escapeHtml(place.website)}" target="_blank">🌐 Website</a>`
-      : ''}
-      ${place.lat && place.lng
-      ? `<a href="https://www.google.com/maps/dir/?api=1&destination=${place.lat},${place.lng}" target="_blank">🗺️ Open in Maps</a>`
-      : ''}
+      ${place.phone  ? `<a class="primary" href="tel:${escapeHtml(place.phone)}">📞 Call</a>` : ''}
+      ${place.phone  ? `<a href="https://wa.me/${encodeURIComponent(phone)}" target="_blank">💬 WhatsApp</a>` : ''}
+      ${place.website ? `<a href="${escapeHtml(place.website)}" target="_blank">🌐 Website</a>` : ''}
+      ${place.lat && place.lng ? `<a href="https://www.google.com/maps/dir/?api=1&destination=${place.lat},${place.lng}" target="_blank">🗺️ Open in Maps</a>` : ''}
     </div>
   `;
-
   mapPlaceDetail.style.display = '';
   mapSidebarHint.style.display = 'none';
 }
+
 function switchView(view) {
   currentView = view;
   listViewBtn.classList.toggle('active', view === 'list');
   mapViewBtn.classList.toggle('active', view === 'map');
   listViewEl.style.display = view === 'list' ? '' : 'none';
-  mapViewEl.style.display = view === 'map' ? '' : 'none';
-
+  mapViewEl.style.display  = view === 'map'  ? '' : 'none';
   if (view === 'map' && currentResults.length > 0 && currentCenter) {
-    // Small delay to let the container become visible before Leaflet measures it
     setTimeout(() => {
-      if (!leafletMap) {
-        initMap(currentCenter);
-      } else {
-        leafletMap.invalidateSize();
-      }
+      if (!leafletMap) initMap(currentCenter);
+      else leafletMap.invalidateSize();
       renderMap(applyFilters());
     }, 50);
   }
 }
-
 listViewBtn.addEventListener('click', () => switchView('list'));
-mapViewBtn.addEventListener('click', () => switchView('map'));
+mapViewBtn.addEventListener('click',  () => switchView('map'));
 
 // ── Main Search ──────────────────────────────────────────────
 async function searchNearby() {
   const category = categorySelect.value;
-  const radius = radiusSelect.value;
+  const radius   = radiusSelect.value;
 
   setStatus('Searching for nearby places…');
-  resultsContainer.innerHTML = '';
+  renderSkeletons(6);
   downloadBtn.disabled = true;
   clearMap();
 
@@ -560,34 +725,26 @@ async function searchNearby() {
     let searchCenter, displayName, precisionLabel;
 
     if (locationMode === 'gps' && gpsCoords) {
-      // Use GPS coordinates directly
-      searchCenter = gpsCoords;
-      displayName = gpsLocationName.textContent || 'Your location';
+      searchCenter   = gpsCoords;
+      displayName    = gpsLocationName.textContent || 'Your location';
       precisionLabel = 'GPS (high accuracy)';
     } else {
-      // Text / pincode geocoding
       const query = pincodeInput.value.trim() || '285123';
-
-      // Try app API first, fallback to Nominatim
       let geocodeData;
       try {
         const geocodeResp = await fetch(`/api/geocode?query=${encodeURIComponent(query)}`);
         geocodeData = await geocodeResp.json();
-      } catch {
-        geocodeData = {};
-      }
+      } catch { geocodeData = {}; }
 
       if (!geocodeData.lat || !geocodeData.lng) {
-        // Nominatim fallback
         const nomResp = await fetch(
           `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=in&limit=1`,
           { headers: { 'Accept-Language': 'en' } }
         );
         const nomData = await nomResp.json();
-        if (!nomData.length) throw new Error('Unable to locate this area. Please try a different pincode or place name.');
+        if (!nomData.length) throw new Error('Unable to locate this area. Try a different pincode or place name.');
         geocodeData = {
-          lat: nomData[0].lat,
-          lng: nomData[0].lon,
+          lat: nomData[0].lat, lng: nomData[0].lon,
           displayName: nomData[0].display_name,
           bbox: nomData[0].boundingbox,
           precision: 'nominatim',
@@ -598,7 +755,7 @@ async function searchNearby() {
       searchCenter = (Number.isFinite(exact.lat) && Number.isFinite(exact.lng))
         ? exact
         : computeBBoxCenter(geocodeData.bbox) || exact;
-      displayName = geocodeData.displayName || query;
+      displayName   = geocodeData.displayName || query;
       precisionLabel = getPrecisionLabel(geocodeData);
     }
 
@@ -607,7 +764,6 @@ async function searchNearby() {
     pageTitleLocation.textContent = displayName;
     precisionText.textContent = precisionLabel;
 
-    // Fetch places
     let placesData;
     try {
       const placesResp = await fetch(
@@ -615,29 +771,28 @@ async function searchNearby() {
       );
       placesData = await placesResp.json();
     } catch {
-      // If backend unavailable, provide empty results gracefully
       placesData = { results: [], source: 'unavailable' };
     }
 
-    const results = (placesData.results || []).map(place => ({
-      ...place,
-      category: place.category || category,
-      delivery: Boolean(place.delivery),
-      distanceKm: calculateDistance(searchCenter.lat, searchCenter.lng, place.lat, place.lng),
-    }));
-
     const radiusKm = Number(radiusSelect.value) / 1000;
+    currentResults = (placesData.results || [])
+      .map(place => ({
+        ...place,
+        category:     place.category || category,
+        delivery:     Boolean(place.delivery),
+        reviewCount:  Number(place.reviewCount || place.user_ratings_total || 0),
+        distanceKm:   calculateDistance(searchCenter.lat, searchCenter.lng, place.lat, place.lng),
+      }))
+      .filter(place => place.distanceKm <= radiusKm);
 
-    currentResults = results
-      .filter(place => place.distanceKm <= radiusKm)
-      .sort((a, b) => {
-        if (a.openNow !== b.openNow) return Number(b.openNow) - Number(a.openNow);
-        return a.distanceKm - b.distanceKm;
-      });
-
-    apiMode.textContent = placesData.source === 'google' ? 'Live API' : placesData.source === 'unavailable' ? 'Offline' : 'Fallback Demo';
+    apiMode.textContent = placesData.source === 'google'
+      ? 'Live API'
+      : placesData.source === 'unavailable'
+        ? 'Offline'
+        : 'Fallback Demo';
 
     if (!currentResults.length) {
+      resultsContainer.innerHTML = '';
       setStatus('No places found. Try a different category or larger radius.', 'error');
       resultCount.textContent = '0 found';
       saveSearchState();
@@ -647,7 +802,6 @@ async function searchNearby() {
     saveSearchState();
     renderResults();
 
-    // If map view is already active, render map
     if (currentView === 'map') {
       setTimeout(() => {
         if (!leafletMap) initMap(currentCenter);
@@ -657,6 +811,7 @@ async function searchNearby() {
     }
 
   } catch (error) {
+    resultsContainer.innerHTML = '';
     setStatus(error.message, 'error');
     resultCount.textContent = '0 found';
   }
@@ -666,72 +821,51 @@ async function searchNearby() {
 function downloadResultsAsCSV() {
   const filtered = applyFilters();
   if (!filtered.length) return;
-
   const rows = filtered.map(p => ({
     Name: p.name,
     Category: p.category || categorySelect.value,
     Address: p.address,
     Phone: p.phone || '',
     Rating: p.rating || '',
+    ReviewCount: p.reviewCount || '',
     OpenNow: p.openNow === true ? 'Open' : p.openNow === false ? 'Closed' : 'Unknown',
     Delivery: p.delivery ? 'Yes' : 'No',
     Distance: `${p.distanceKm.toFixed(2)} km`,
     Website: p.website || '',
   }));
-
   const header = Object.keys(rows[0]);
   const csv = [
     header.join(','),
     ...rows.map(r => header.map(k => `"${String(r[k] || '').replaceAll('"', '""')}"`).join(','))
   ].join('\n');
-
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
   a.href = url;
   a.download = `${categorySelect.value}-results-${Date.now()}.csv`;
   a.click();
   URL.revokeObjectURL(url);
 }
 
+// ── Translations ─────────────────────────────────────────────
 const translations = {
   en: {
     eyebrow: 'Family Nearby Finder',
     heroTitle: 'Find trusted services near ',
-    modeText: '✏️ Type location',
-    modeGps: '📡 Use my location',
+    modeText: '✏️ Type location', modeGps: '📡 Use my location',
     gpsDetectBtn: 'Detect My Location',
     gpsDefault: 'Click "Detect My Location" to begin',
     detectedLocation: 'Detected Location',
-    labelLocation: 'Location / Pincode',
-    labelCategory: 'Category',
-    labelRadius: 'Search Radius',
+    labelLocation: 'Location / Pincode', labelCategory: 'Category', labelRadius: 'Search Radius',
     searchBtn: 'Search Nearby',
-    tabAll: 'All',
-    tabFav: '⭐ Favorites',
-    listBtn: '☰ List',
-    mapBtn: '🗺️ Map',
-    phoneOnly: 'Only with phone',
-    delivery: 'Home delivery',
-    openNow: 'Open now',
+    tabAll: 'All', tabFav: '⭐ Favorites',
+    listBtn: '☰ List', mapBtn: '🗺️ Map',
+    phoneOnly: '📞 Has phone', delivery: '🚚 Home delivery', openNow: '🟢 Open now',
     downloadBtn: '⬇ Download CSV',
-    infoLocation: 'Location',
-    infoResults: 'Results',
-    infoPrecision: 'Precision',
-    infoMode: 'Mode',
+    infoLocation: 'Location', infoResults: 'Results', infoPrecision: 'Precision', infoMode: 'Mode',
     defaultStatus: 'Enter a location or use GPS, then click Search.',
     mapHint: 'Click a pin to see details',
-    copyName: '📋 Copy Name',
-    copyPhone: '📋 Copy Phone',
-    call: '📞 Call',
-    whatsapp: '💬 WhatsApp',
-    website: '🌐 Website',
-    maps: '🗺️ Maps',
-    openLabel: 'Open now',
-    closedLabel: 'Closed',
-    hoursLabel: 'Hours unavailable',
-    noRating: 'No rating',
-    distance: 'Distance',
+    copyName: '📋 Copy Name', copyPhone: '📋 Copy Phone',
     placeholderInput: 'e.g. Jalaun, Uttar Pradesh  or  285123',
     categories: {
       all: 'All Services', hospital: 'Hospital', medical: 'Medical',
@@ -742,46 +876,27 @@ const translations = {
       footwear: 'Footwear', electronics: 'Electronics', atm: 'ATM',
       bank: 'Bank', petrol: 'Petrol Pump', salon: 'Salon',
       laundry: 'Laundry', stationery: 'Stationery', school: 'School',
+      gym: 'Gym / Fitness', juice: 'Juice Centre', alcohol: 'Bar / Alcohol',
     },
     radii: { '5000': '5 km', '10000': '10 km', '25000': '25 km', '50000': '50 km' },
   },
   hi: {
     eyebrow: 'नज़दीकी सेवा खोजें',
     heroTitle: 'भरोसेमंद सेवाएं खोजें — ',
-    modeText: '✏️ जगह टाइप करें',
-    modeGps: '📡 मेरी लोकेशन',
+    modeText: '✏️ जगह टाइप करें', modeGps: '📡 मेरी लोकेशन',
     gpsDetectBtn: 'लोकेशन पता करें',
     gpsDefault: '"लोकेशन पता करें" पर क्लिक करें',
     detectedLocation: 'मिली हुई लोकेशन',
-    labelLocation: 'जगह / पिनकोड',
-    labelCategory: 'श्रेणी',
-    labelRadius: 'खोज दायरा',
+    labelLocation: 'जगह / पिनकोड', labelCategory: 'श्रेणी', labelRadius: 'खोज दायरा',
     searchBtn: 'खोजें',
-    tabAll: 'सभी',
-    tabFav: '⭐ पसंदीदा',
-    listBtn: '☰ सूची',
-    mapBtn: '🗺️ नक्शा',
-    phoneOnly: 'सिर्फ फोन वाले',
-    delivery: 'होम डिलीवरी',
-    openNow: 'अभी खुला',
+    tabAll: 'सभी', tabFav: '⭐ पसंदीदा',
+    listBtn: '☰ सूची', mapBtn: '🗺️ नक्शा',
+    phoneOnly: '📞 फोन वाले', delivery: '🚚 होम डिलीवरी', openNow: '🟢 अभी खुला',
     downloadBtn: '⬇ CSV डाउनलोड',
-    infoLocation: 'जगह',
-    infoResults: 'परिणाम',
-    infoPrecision: 'सटीकता',
-    infoMode: 'मोड',
+    infoLocation: 'जगह', infoResults: 'परिणाम', infoPrecision: 'सटीकता', infoMode: 'मोड',
     defaultStatus: 'जगह डालें या GPS उपयोग करें, फिर खोजें।',
     mapHint: 'विवरण देखने के लिए पिन पर क्लिक करें',
-    copyName: '📋 नाम कॉपी करें',
-    copyPhone: '📋 फोन कॉपी करें',
-    call: '📞 कॉल करें',
-    whatsapp: '💬 WhatsApp',
-    website: '🌐 वेबसाइट',
-    maps: '🗺️ नक्शा खोलें',
-    openLabel: 'अभी खुला',
-    closedLabel: 'बंद',
-    hoursLabel: 'समय उपलब्ध नहीं',
-    noRating: 'रेटिंग नहीं',
-    distance: 'दूरी',
+    copyName: '📋 नाम कॉपी करें', copyPhone: '📋 फोन कॉपी करें',
     placeholderInput: 'जैसे: जालौन, उत्तर प्रदेश  या  285123',
     categories: {
       all: 'सभी सेवाएं', hospital: 'अस्पताल', medical: 'मेडिकल',
@@ -792,6 +907,7 @@ const translations = {
       footwear: 'जूते', electronics: 'इलेक्ट्रॉनिक्स', atm: 'ATM',
       bank: 'बैंक', petrol: 'पेट्रोल पंप', salon: 'सैलून',
       laundry: 'धुलाई', stationery: 'स्टेशनरी', school: 'स्कूल',
+      gym: 'जिम / फिटनेस', juice: 'जूस सेंटर', alcohol: 'शराब / बार',
     },
     radii: { '5000': '5 किमी', '10000': '10 किमी', '25000': '25 किमी', '50000': '50 किमी' },
   },
@@ -799,103 +915,40 @@ const translations = {
 
 function applyTranslations() {
   const T = translations[isHindi ? 'hi' : 'en'];
-
-  // Eyebrow & hero
   document.querySelector('.eyebrow').textContent = T.eyebrow;
-
-  // Location mode buttons
   const modeBtns = document.querySelectorAll('.loc-mode-btn');
   if (modeBtns[0]) modeBtns[0].innerHTML = T.modeText;
   if (modeBtns[1]) modeBtns[1].innerHTML = T.modeGps;
-
-  // GPS bar
   const gpsDetect = document.getElementById('detectLocationBtn');
   if (gpsDetect) gpsDetect.textContent = T.gpsDetectBtn;
-  const gpsStatusEl = document.getElementById('gpsStatusText');
-  if (gpsStatusEl && gpsStatusEl.textContent === translations[isHindi ? 'en' : 'hi'].gpsDefault) {
-    gpsStatusEl.textContent = T.gpsDefault;
-  }
-
-  // Labels
-  const labels = document.querySelectorAll('.input-group label');
-  labels.forEach(label => {
-    if (label.htmlFor === 'pincodeInput') label.textContent = T.labelLocation;
-    if (label.htmlFor === 'categorySelect') label.textContent = T.labelCategory;
-    if (label.htmlFor === 'radiusSelect') label.textContent = T.labelRadius;
-    if (label.textContent === translations[isHindi ? 'en' : 'hi'].detectedLocation ||
-      label.textContent === T.detectedLocation) {
-      label.textContent = T.detectedLocation;
-    }
-  });
-
-  // Placeholder
   pincodeInput.placeholder = T.placeholderInput;
-
-  // Search button
   const submitBtn = document.querySelector('#searchForm button[type="submit"]');
   if (submitBtn) submitBtn.textContent = T.searchBtn;
-
-  // Tabs
-  const tabBtns = document.querySelectorAll('.tab-btn');
-  tabBtns.forEach(btn => {
+  tabs.forEach(btn => {
     if (btn.dataset.tab === 'all') btn.textContent = T.tabAll;
     if (btn.dataset.tab === 'favorites') btn.textContent = T.tabFav;
   });
-
-  // View buttons
   if (listViewBtn) listViewBtn.textContent = T.listBtn;
-  if (mapViewBtn) mapViewBtn.textContent = T.mapBtn;
-
-  // Toggle chips
-  document.querySelectorAll('.toggle-chip span').forEach(span => {
-    const en = translations.en;
-    const hi = translations.hi;
-    if (span.textContent === en.phoneOnly || span.textContent === hi.phoneOnly) span.textContent = T.phoneOnly;
-    if (span.textContent === en.delivery || span.textContent === hi.delivery) span.textContent = T.delivery;
-    if (span.textContent === en.openNow || span.textContent === hi.openNow) span.textContent = T.openNow;
-  });
-
-  // Download button
-  if (downloadBtn) downloadBtn.textContent = currentResults.length === 0
-    ? T.downloadBtn
-    : T.downloadBtn;
-
-  // Info card labels
+  if (mapViewBtn)  mapViewBtn.textContent  = T.mapBtn;
+  if (downloadBtn) downloadBtn.textContent = T.downloadBtn;
   const infoCards = document.querySelectorAll('.info-card small');
-  const infoKeys = ['infoLocation', 'infoResults', 'infoPrecision', 'infoMode'];
+  const infoKeys  = ['infoLocation', 'infoResults', 'infoPrecision', 'infoMode'];
   infoCards.forEach((el, i) => { if (infoKeys[i]) el.textContent = T[infoKeys[i]]; });
-
-  // Category select options
-  const catOptions = categorySelect.querySelectorAll('option');
-  catOptions.forEach(opt => {
+  categorySelect.querySelectorAll('option').forEach(opt => {
     const key = opt.value;
     if (T.categories[key]) opt.textContent = T.categories[key];
   });
-
-  // Radius select options
-  const radOptions = radiusSelect.querySelectorAll('option');
-  radOptions.forEach(opt => {
+  radiusSelect.querySelectorAll('option').forEach(opt => {
     if (T.radii[opt.value]) opt.textContent = T.radii[opt.value];
   });
-
-  // Map hint
   if (mapSidebarHint) mapSidebarHint.textContent = T.mapHint;
-
-  // Status message (only if it's still the default)
-  const enDefault = translations.en.defaultStatus;
-  const hiDefault = translations.hi.defaultStatus;
-  if (statusMessage.textContent === enDefault || statusMessage.textContent === hiDefault) {
-    setStatus(T.defaultStatus);
-  }
-
-  // Re-render cards so action buttons translate too
+  document.documentElement.lang = isHindi ? 'hi' : 'en';
   if (currentResults.length > 0) renderResults();
 }
 
 function activateLanguage() {
   isHindi = !isHindi;
   langToggleBtn.textContent = isHindi ? 'English' : 'हिंदी';
-  document.documentElement.lang = isHindi ? 'hi' : 'en';
   applyTranslations();
 }
 
@@ -908,7 +961,7 @@ function toggleLargeText() {
 // ── Voice Search ─────────────────────────────────────────────
 function initVoiceSearch() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SR) { setStatus('Voice search is not supported in this browser.', 'error'); return; }
+  if (!SR) { setStatus('Voice search not supported in this browser.', 'error'); return; }
   recognition = new SR();
   recognition.lang = isHindi ? 'hi-IN' : 'en-IN';
   recognition.onresult = e => {
@@ -919,15 +972,22 @@ function initVoiceSearch() {
   recognition.onerror = () => setStatus('Voice search failed.', 'error');
 }
 
+// ── Back to Top ──────────────────────────────────────────────
+window.addEventListener('scroll', () => {
+  backToTopBtn.style.display = window.scrollY > 400 ? '' : 'none';
+});
+backToTopBtn.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+
 // ── Event Listeners ──────────────────────────────────────────
 form.addEventListener('submit', e => { e.preventDefault(); searchNearby(); });
-phoneOnlyToggle.addEventListener('change', renderResults);
-homeDeliveryToggle.addEventListener('change', renderResults);
-openNowToggle.addEventListener('change', renderResults);
+phoneOnlyToggle.addEventListener('change', () => { updateActiveFilterCount(); renderResults(); });
+homeDeliveryToggle.addEventListener('change', () => { updateActiveFilterCount(); renderResults(); });
+openNowToggle.addEventListener('change', () => { updateActiveFilterCount(); renderResults(); });
 radiusSelect.addEventListener('change', renderResults);
 downloadBtn.addEventListener('click', downloadResultsAsCSV);
 largeTextBtn.addEventListener('click', toggleLargeText);
 langToggleBtn.addEventListener('click', activateLanguage);
+darkModeBtn.addEventListener('click', toggleDarkMode);
 voiceSearchBtn.addEventListener('click', () => {
   if (!recognition) initVoiceSearch();
   if (recognition) recognition.start();
@@ -942,32 +1002,43 @@ tabs.forEach(btn => {
 });
 
 // ── Init ─────────────────────────────────────────────────────
-favorites = loadFavorites();
+favorites    = loadFavorites();
 footerYear.textContent = new Date().getFullYear();
+
+// Restore dark mode pref
+if (localStorage.getItem('aaspaas_dark') === '1') {
+  isDark = true;
+  document.body.classList.add('dark');
+  darkModeBtn.textContent = '☀️';
+}
 
 // Restore last search
 const saved = loadSearchState();
 if (saved) {
-  pincodeInput.value = saved.query || '';
-  categorySelect.value = saved.category || 'all';
-  radiusSelect.value = saved.radius || '50000';
-  phoneOnlyToggle.checked = Boolean(saved.phoneOnly);
-  homeDeliveryToggle.checked = Boolean(saved.homeDelivery);
-  openNowToggle.checked = Boolean(saved.openNow);
+  pincodeInput.value              = saved.query    || '';
+  categorySelect.value            = saved.category || 'all';
+  radiusSelect.value              = saved.radius   || '50000';
+  phoneOnlyToggle.checked         = Boolean(saved.phoneOnly);
+  homeDeliveryToggle.checked      = Boolean(saved.homeDelivery);
+  openNowToggle.checked           = Boolean(saved.openNow);
   if (saved.locationMode === 'gps' && saved.gpsCoords) {
     gpsCoords = saved.gpsCoords;
     setLocationMode('gps');
     gpsLocationName.textContent = 'Previously detected location';
     setGpsStatus('✅', 'Using previously detected location.');
   }
+  // Sync chips with restored category
+  document.querySelectorAll('.cat-chip').forEach(c => {
+    c.classList.toggle('active', c.dataset.cat === categorySelect.value);
+  });
 }
 
 // Default UI state
-locationText.textContent = 'Your area';
+locationText.textContent  = 'Your area';
 precisionText.textContent = 'Area estimate';
-apiMode.textContent = 'Live API';
+apiMode.textContent       = 'Live API';
 pageTitleLocation.textContent = 'your area';
-resultCount.textContent = '0 found';
-downloadBtn.disabled = true;
+resultCount.textContent   = '0 found';
+downloadBtn.disabled      = true;
 setStatus('Enter a location or use GPS, then click Search.');
 setLocationMode('text');
